@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "QR Scanner Extension",
+  "version": "0.1.0",
+  "action": {
+    "default_title": "QR Scanner",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "content/scanPage.js"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
