@@ -24,6 +24,17 @@ export default defineConfig({
           return 'assets/[name]-[hash][extname]';
         }
       }
+    },
+    commonjsOptions: {
+      include: [/node_modules/]
+    }
+  },
+  optimizeDeps: {
+    include: ['@zxing/browser', '@zxing/library']
+  },
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, 'src')
     }
   }
 });

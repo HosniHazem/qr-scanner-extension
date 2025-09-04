@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { BrowserMultiFormatReader, BrowserQRCodeReader } from '@zxing/browser';
 import { BarcodeFormat, DecodeHintType } from '@zxing/library';
-import jsQR from 'jsqr';
 
 const readerHints = new Map();
 readerHints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]);
@@ -174,22 +173,6 @@ export default function App() {
     return result;
   }
 
-  function decodeWithJsQR(canvas) {
-    try {
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(imgData.data, canvas.width, canvas.height);
-      if (code && code.data) {
-        console.log('[file] jsQR decoded', code.data);
-        return code.data;
-      }
-      return null;
-    } catch (e) {
-      console.warn('[file] jsQR error', e);
-      return null;
-    }
-  }
-
   async function decodeWithZXingFromBlobUrl(blobUrl) {
     try {
       const img = await createImageFromUrl(blobUrl);
@@ -211,12 +194,9 @@ export default function App() {
               console.log('[file] ZXing decoded', { scale: s, variant: v.note, rot: r.deg, text });
               if (text) return text;
             } catch {}
-            // Try jsQR
-            const jsqrText = decodeWithJsQR(r.canvas);
-            if (jsqrText) return jsqrText;
           }
         }
-        console.log('[file] ZXing/jsQR tried variants at scale', s, 'none succeeded');
+        console.log('[file] ZXing tried variants at scale', s, 'none succeeded');
       }
       // Direct fallbacks
       try {
@@ -262,19 +242,62 @@ export default function App() {
     }
   };
 
+  const testContentScript = async () => {
+    console.log('[popup] testing content script injection');
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'TEST_CONTENT_SCRIPT' });
+      console.log('[popup] test response', response);
+      alert('Content script test: ' + (response?.success ? 'SUCCESS' : 'FAILED'));
+    } catch (e) {
+      console.error('[popup] test failed', e);
+      alert('Content script test FAILED: ' + e.message);
+    }
+  };
+
   const scanActiveTab = async () => {
+    console.log('[popup] starting scan active tab');
     setIsScanningPage(true);
     setPageResults([]);
     try {
+      console.log('[popup] sending SCAN_PAGE_IMAGES message');
       const response = await chrome.runtime.sendMessage({ type: 'SCAN_PAGE_IMAGES' });
+      console.log('[popup] received response', response);
       const results = response?.results || [];
-      console.log('[page] results', results);
+      console.log('[popup] results count', results.length);
       setPageResults(results);
     } catch (e) {
-      console.error('[page] scan failed', e);
-      setPageResults([{ text: 'Failed to scan the active tab.', source: 'error' }]);
+      console.error('[popup] scan failed', e);
+      setPageResults([{ text: 'Failed to scan the active tab: ' + e.message, source: 'error' }]);
     } finally {
       setIsScanningPage(false);
+    }
+  };
+
+  const saveQRImage = async (imageData, width, height, source) => {
+    try {
+      // Create canvas from image data
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      const imgData = new ImageData(new Uint8ClampedArray(imageData), width, height);
+      ctx.putImageData(imgData, 0, 0);
+      
+      // Convert to blob and download
+      canvas.toBlob((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `qr-detected-${Date.now()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 'image/png');
+      
+      console.log('[popup] QR image saved');
+    } catch (e) {
+      console.error('[popup] failed to save QR image:', e);
     }
   };
 
@@ -282,9 +305,14 @@ export default function App() {
     <div className="container">
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div className="pill">QR Scanner</div>
-        <button className="secondary" onClick={scanActiveTab} disabled={isScanningPage}>
-          {isScanningPage ? 'Scanning…' : 'Scan Active Tab'}
-        </button>
+        <div className="row">
+          <button className="secondary" onClick={testContentScript} style={{ fontSize: '10px' }}>
+            Test Injection
+          </button>
+          <button className="secondary" onClick={scanActiveTab} disabled={isScanningPage}>
+            {isScanningPage ? 'Scanning…' : 'Scan Active Tab'}
+          </button>
+        </div>
       </div>
 
       <div className="video-wrap">
@@ -316,7 +344,18 @@ export default function App() {
           <div className="result-item">No results yet.</div>
         ) : (
           pageResults.map((r, idx) => (
-            <div key={idx} className="result-item">{r.text}</div>
+            <div key={idx} className="result-item">
+              <div>{r.text}</div>
+              {r.imageData && r.width && r.height && (
+                <button 
+                  className="secondary" 
+                  style={{ fontSize: '10px', marginTop: '5px' }}
+                  onClick={() => saveQRImage(r.imageData, r.width, r.height, r.source)}
+                >
+                  Save QR Image
+                </button>
+              )}
+            </div>
           ))
         )}
       </div>
