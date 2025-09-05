@@ -16,16 +16,17 @@ npm install
 ```bash
 npm run dev
 ```
-This builds to `dist` continuously. Load unpacked in Chrome:
-- Open chrome://extensions
-- Enable Developer mode
-- Load Unpacked -> select `dist`
 
 ## Build
 
 ```bash
 npm run build
 ```
+
+This builds to `dist` continuously. Load unpacked in Chrome:
+- Open chrome://extensions
+- Enable Developer mode
+- Load Unpacked -> select `dist`
 
 ## Zip for store
 
